@@ -3,6 +3,7 @@
 # 產生圖片大小: 64x64
 #
 from os import path
+import time
 import torch
 import torch.nn as nn
 import torch.optim as optimizers
@@ -69,7 +70,8 @@ C = 0.01
 UPDATE_G_PER_EPOCH = 5
 
 ## 訓練
-dataloader = DataLoader(puipui_imgs, batch_size=BATCH_SIZE, shuffle=True, num_workers=10)
+img_dataloader = DataLoader(puipui_imgs, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
+data = [b[0].cuda() for b in img_dataloader]
 
 g_optim = optimizers.RMSprop(g_net.parameters(), lr=LR)
 d_optim = optimizers.RMSprop(d_net.parameters(), lr=LR)
@@ -79,9 +81,9 @@ fixed_noise = torch.randn(64, 100, 1, 1).cuda()
 for epoch in range(1, EPOCHS+1):
     total_d_loss = 0
     total_g_loss = 0
-
-    for i, batch in enumerate(dataloader):
-        x = batch[0].cuda()
+    t0 = time.time()
+    for i, batch in enumerate(data):
+        x = batch
         x_size = x.size(0)
         random_noise = torch.randn(x_size, 100, 1, 1).cuda()
 
@@ -102,16 +104,17 @@ for epoch in range(1, EPOCHS+1):
         for p in d_net.parameters():
             p.data.clamp_(-C, C)
 
-        # 更新生成網路
-        if epoch % UPDATE_G_PER_EPOCH == 0:
-            g_optim.zero_grad()
-            d_pred = d_net(fake_puipui).view(-1)
-            g_loss = -torch.mean(d_pred)
-            g_loss.backward()
-            g_optim.step()
-            total_g_loss += g_loss.item()
+    # 更新生成網路
+    if epoch % UPDATE_G_PER_EPOCH == 0:
+        g_optim.zero_grad()
+        d_pred = d_net(fake_puipui).view(-1)
+        g_loss = -torch.mean(d_pred)
+        g_loss.backward()
+        g_optim.step()
+        total_g_loss += g_loss.item()
 
-            print(f'EPOCH: {epoch} | D loss: {total_d_loss} | G loss: {total_g_loss}')
+        print(f'EPOCH: {epoch} | D loss: {total_d_loss} | G loss: {total_g_loss} | dT: {time.time()-t0}')
+
 
     if epoch % 100 == 0:
         with torch.no_grad():
@@ -120,5 +123,4 @@ for epoch in range(1, EPOCHS+1):
         plt.imsave(f'wgan_results/{epoch}.jpg', np.transpose(img,(1,2,0)).numpy())
         torch.save(g_net.state_dict(), G_NET_PATH)
         torch.save(d_net.state_dict(), D_NET_PATH)
-
-
+    t0 = time.time()
