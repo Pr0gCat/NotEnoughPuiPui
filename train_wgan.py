@@ -1,7 +1,7 @@
 # # 用WGAN方法GAN出更多天竺鼠車車圖片
-# 
+#
 # 產生圖片大小: 64x64
-# 
+#
 
 import torch
 import torch.nn as nn
@@ -14,11 +14,11 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 
-from dcgan import NEPPDiscriminator, NEPPGenerator
+from wgan import NEPPDiscriminator, NEPPGenerator
 
-manualSeed = 999
-random.seed(manualSeed)
-torch.manual_seed(manualSeed)
+# manualSeed = 666
+# random.seed(manualSeed)
+# torch.manual_seed(manualSeed)
 
 # from: https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html
 def weights_init(m):
@@ -50,19 +50,18 @@ puipui_imgs = ImageFolder(root='puipui', transform=transforms.Compose([
 print('number of images:', len(puipui_imgs.imgs))
 
 ## 超參數
-EPOCHS = 2000
+EPOCHS = 50000
 BATCH_SIZE = 64
 LR = 0.0001
 C = 0.01
-UPDATE_G_PER_EPOCH = 50
+UPDATE_G_PER_EPOCH = 5
 
 ## 訓練
-dataloader = DataLoader(puipui_imgs, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
+dataloader = DataLoader(puipui_imgs, batch_size=BATCH_SIZE, shuffle=True, num_workers=10)
 
 g_optim = optimizers.RMSprop(g_net.parameters(), lr=LR)
 d_optim = optimizers.RMSprop(d_net.parameters(), lr=LR)
 
-generated = []
 fixed_noise = torch.randn(64, 100, 1, 1).cuda()
 
 for epoch in range(1, EPOCHS+1):
@@ -76,7 +75,7 @@ for epoch in range(1, EPOCHS+1):
 
         # 用真和假的圖更新評論網路
         d_optim.zero_grad()
-        
+
         # 真圖
         d_pred_real = d_net(x).view(-1)
         # 假圖
@@ -91,22 +90,22 @@ for epoch in range(1, EPOCHS+1):
         for p in d_net.parameters():
             p.data.clamp_(-C, C)
 
-    # 更新生成網路
-    if epoch % UPDATE_G_PER_EPOCH == 0:
-        g_optim.zero_grad()
-        d_pred = d_net(fake_puipui).view(-1)
-        g_loss = -torch.mean(d_pred)
-        g_loss.backward()
-        g_optim.step()
-        total_g_loss += g_loss.item()
-        
-        print(f'EPOCH: {epoch} | D loss: {total_d_loss} | G loss: {total_g_loss}')
+        # 更新生成網路
+        if epoch % UPDATE_G_PER_EPOCH == 0:
+            g_optim.zero_grad()
+            d_pred = d_net(fake_puipui).view(-1)
+            g_loss = -torch.mean(d_pred)
+            g_loss.backward()
+            g_optim.step()
+            total_g_loss += g_loss.item()
 
+            print(f'EPOCH: {epoch} | D loss: {total_d_loss} | G loss: {total_g_loss}')
+
+    if epoch % 100 == 0:
         with torch.no_grad():
             generated_puipui = g_net(fixed_noise).detach().cpu()
             img = make_grid(generated_puipui, padding=2, normalize=True)
-            generated.append(img)
-            plt.imsave(f'wgan_results/{epoch}.jpg', np.transpose(img,(1,2,0)).numpy())
+        plt.imsave(f'wgan_results/{epoch}.jpg', np.transpose(img,(1,2,0)).numpy())
         torch.save(g_net.state_dict(), 'wgan_models/g_net.pth')
         torch.save(d_net.state_dict(), 'wgan_models/d_net.pth')
 
